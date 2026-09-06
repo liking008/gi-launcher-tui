@@ -60,7 +60,7 @@ jobs:
         with:
           files: dist/*
           body: |
-            ## GI Launcher TUI v${{ github.ref_name }}
+            ## GI Launcher TUI ${{ github.ref_name }}
 
             静态链接的 Linux amd64 可执行文件。
 
