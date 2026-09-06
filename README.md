@@ -1,9 +1,15 @@
 # GI Launcher TUI
 
-一个用 **Go + Bubble Tea** 编写的原神（国服/国际服/B服）终端启动器。参考
+一个用 **Go + Bubble Tea** 编写的 **原神（Genshin Impact）**（国服/国际服/B服）
+终端启动器。参考
 [Snap.Hutao.Remastered](https://github.com/SnapHutaoRemasteringProject/Snap.Hutao.Remastered)
 与 [an-anime-game-launcher](https://github.com/an-anime-team/an-anime-game-launcher)
 的实现，支持多服务器管理、增量/全量下载、断点续传、版本切换与游戏启动。
+
+> Genshin Impact / 原神 launcher for the terminal (Linux/Arch).
+>
+> **关键词 / keywords**：Genshin Impact · 原神 · 米哈游 · miHoYo · launcher ·
+> 启动器 · dwproton · proton · TUI · Bubble Tea · sophon · Linux · Arch
 
 ## 功能
 
