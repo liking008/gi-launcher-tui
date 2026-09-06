@@ -31,11 +31,12 @@
 特有的 `syscall.SysProcAttr{Setsid}` 等 API，不适用于 Windows / ARM，也不提供
 对应产物。
 
-- **启动游戏**依赖系统安装 `dwproton`：Arch / AUR 装 `dwproton-bin`；
-  **其他发行版请自行准备 `dwproton`**（可参考
-  [an-anime-game-launcher](https://github.com/an-anime-team/an-anime-game-launcher)
-  的文档），否则游戏启动功能不可用。
-- 下载 / 校验 / 版本切换等**其他功能不依赖 `dwproton`**，没有它也能正常使用。
+- **启动游戏强依赖 `dwproton`**（dawn-winery 出品的 gacha 修复版 Proton）：
+  - Arch / AUR：安装 `dwproton-bin`；
+  - 其他发行版：从
+    [dawn.wine/dawn-winery/dwproton](https://dawn.wine/dawn-winery/dwproton/)
+    下载 dwproton 并放到自己的目录（启动器通过 `$DWPROTON` 或系统路径查找）。它不能被省略，否则启动游戏功能不可用。
+- 下载 / 校验 / 版本切换等其他功能不依赖 `dwproton`。
 
 ## 构建与运行
 
