@@ -9,12 +9,7 @@ on:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        goos: [linux]
-        goarch: [amd64, arm64]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,13 +19,17 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build
+      - name: Build (static, Linux amd64)
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
+          GOOS: linux
+          GOARCH: amd64
           CGO_ENABLED: '0'
         run: |
-          go build -trimpath -ldflags="-s -w" -o "gi-launcher-${{ matrix.goos }}-${{ matrix.goarch }}" .
+          go build -trimpath -ldflags="-s -w" -o gi-launcher .
+
+      - name: Verify static linking
+        run: |
+          file gi-launcher | grep -q "statically linked" || (echo "binary is not statically linked"; exit 1)
 
       - name: Verify (vet + gofmt)
         run: |
@@ -40,21 +39,33 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gi-launcher-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: gi-launcher-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: gi-launcher-linux-amd64
+          path: gi-launcher
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download all artifacts
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
+          name: gi-launcher-linux-amd64
           path: dist
-          merge-multiple: true
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
+          body: |
+            ## GI Launcher TUI v${{ github.ref_name }}
+
+            静态链接的 Linux amd64 可执行文件。
+
+            **运行环境**：Linux（主要面向 Arch 系发行版）。
+
+            **启动游戏需要系统安装 `dwproton`**：
+            - Arch / AUR：`dwproton-bin`
+            - 其他发行版：请自行准备 `dwproton`（可参考
+              [an-anime-game-launcher](https://github.com/an-anime-team/an-anime-game-launcher)
+              的文档），否则游戏启动功能不可用。下载/校验/版本切换等其他功能不依赖它。

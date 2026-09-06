@@ -19,6 +19,18 @@
 - **游戏启动**：使用系统 `dwproton` + 独立 wine prefix，参考 aagl 的参数
   （`WINEPREFIX`、`WINE_ENABLE_TIMEOUT_FIX=1`、`PROTON_USE_WINED3D=0`、DXVK）。
 
+## 运行环境
+
+仅适用于 **Linux（x86_64/amd64）**，主要面向 **Arch 系发行版**。该项目使用 Linux
+特有的 `syscall.SysProcAttr{Setsid}` 等 API，不适用于 Windows / ARM，也不提供
+对应产物。
+
+- **启动游戏**依赖系统安装 `dwproton`：Arch / AUR 装 `dwproton-bin`；
+  **其他发行版请自行准备 `dwproton`**（可参考
+  [an-anime-game-launcher](https://github.com/an-anime-team/an-anime-game-launcher)
+  的文档），否则游戏启动功能不可用。
+- 下载 / 校验 / 版本切换等**其他功能不依赖 `dwproton`**，没有它也能正常使用。
+
 ## 构建与运行
 
 ```bash
@@ -26,7 +38,9 @@ go build -o gi-launcher .
 ./gi-launcher        # 在真实终端中运行
 ```
 
-依赖：Go 1.21+；启动游戏需系统安装 `dwproton`（如 AUR 的 `dwproton-bin`）。
+依赖：Go 1.21+（发布产物为 `CGO_ENABLED=0` 的静态链接可执行文件）。
+
+你也可以从 GitHub Releases 直接下载已构建的静态可执行文件。
 
 ## 界面操作
 
