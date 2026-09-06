@@ -1,3 +1,4 @@
 /gi-launcher
 /gi-launcher-tui
 *.exe
+/cnman.bin
