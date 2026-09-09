@@ -32,6 +32,10 @@ type Edition struct {
 	ProtocolURL        string
 	ProtocolKey        string
 	ProtocolLauncherID string
+	// RootFiles are edition-specific files living at the install root (outside
+	// _Data), e.g. the CN anti-cheat DLLs. They must be moved out when the
+	// shared directory serves another server family, or the game aborts.
+	RootFiles []string
 }
 
 const cnHost = "https://hyp-api.mihoyo.com/hyp/hyp-connect/api"
@@ -57,6 +61,7 @@ var (
 		ProtocolURL:        cnProtocol,
 		ProtocolKey:        "KAtdSsoQ",
 		ProtocolLauncherID: "17",
+		RootFiles:          []string{"mhypbase.dll", "HoYoKProtect.sys", "rtlbase.dll"},
 	}
 	Bilibili = Edition{
 		Name:               "B服",
@@ -72,6 +77,7 @@ var (
 		ProtocolURL:        cnProtocol,
 		ProtocolKey:        "KAtdSsoQ",
 		ProtocolLauncherID: "17",
+		RootFiles:          []string{"mhypbase.dll", "HoYoKProtect.sys", "rtlbase.dll"},
 	}
 	Oversea = Edition{
 		Name:               "国际服",
