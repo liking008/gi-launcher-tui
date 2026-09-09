@@ -32,10 +32,6 @@ type Edition struct {
 	ProtocolURL        string
 	ProtocolKey        string
 	ProtocolLauncherID string
-	// RootFiles are edition-specific files living at the install root (outside
-	// _Data), e.g. the CN anti-cheat DLLs. They must be moved out when the
-	// shared directory serves another server family, or the game aborts.
-	RootFiles []string
 }
 
 const cnHost = "https://hyp-api.mihoyo.com/hyp/hyp-connect/api"
@@ -61,7 +57,6 @@ var (
 		ProtocolURL:        cnProtocol,
 		ProtocolKey:        "KAtdSsoQ",
 		ProtocolLauncherID: "17",
-		RootFiles:          []string{"mhypbase.dll", "HoYoKProtect.sys", "rtlbase.dll"},
 	}
 	Bilibili = Edition{
 		Name:               "B服",
@@ -77,7 +72,6 @@ var (
 		ProtocolURL:        cnProtocol,
 		ProtocolKey:        "KAtdSsoQ",
 		ProtocolLauncherID: "17",
-		RootFiles:          []string{"mhypbase.dll", "HoYoKProtect.sys", "rtlbase.dll"},
 	}
 	Oversea = Edition{
 		Name:               "国际服",
@@ -140,4 +134,26 @@ func (e Edition) RegistryKeyValue() (key, value string) {
 		return `Software\miHoYo\Genshin Impact`, "MIHOYOSDK_ADL_PROD_OVERSEA_h1158948810"
 	}
 	return `Software\miHoYo\原神`, "MIHOYOSDK_ADL_PROD_CN_h3123967166"
+}
+
+// UMUID returns the dwproton UMU identifier for this game, so its
+// game-specific protonfixes apply (Genshin Impact needs umu-genshin, which
+// makes proton run the game from its steam.exe shim for the anti-cheat driver
+// emulation). Empty means no special identifier is known.
+func (e Edition) UMUID() string {
+	if e.ExeName == "GenshinImpact.exe" {
+		return "umu-genshin"
+	}
+	return ""
+}
+
+// HandshakeHost is the anti-cheat driver handshake endpoint the game must be
+// able to reach at startup (HoYoKProtect contacts it during initDriver; on
+// failure the game aborts with "initDriver Failed"). The oversea endpoint is
+// routinely unreachable from CN networks and needs a working route.
+func (e Edition) HandshakeHost() string {
+	if e.IsOversea {
+		return "overseauspider.yuanshen.com"
+	}
+	return "sdk-static.mihoyo.com"
 }

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -80,6 +81,19 @@ func gameProcessRunning(exeName string) bool {
 	return err == nil && len(strings.Fields(string(out))) > 0
 }
 
+// reachableHTTPS reports whether an HTTPS request to host completes within a
+// short timeout. Any HTTP status counts as reachable; only transport errors
+// (DNS/TCP/TLS failure) report unreachable.
+func reachableHTTPS(host string) bool {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("https://" + host)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return true
+}
+
 // subscribeLaunch waits for the game-process detector result.
 func (m *model) subscribeLaunch() tea.Cmd {
 	return func() tea.Msg {
@@ -122,6 +136,17 @@ func (m *model) launchGame() tea.Cmd {
 		// Kill stale wine/lutris processes from previous attempts.
 		killStaleGameProcesses()
 
+		// The anti-cheat driver performs a network handshake at startup; warn
+		// immediately if the required host is unreachable instead of waiting
+		// for the process-detection timeout.
+		if host := m.currentEdition().HandshakeHost(); host != "" {
+			if !reachableHTTPS(host) {
+				ch <- launchDoneMsg{text: "警告: 反作弊握手服务器 " + host +
+					" 无法连接。国际服启动会因 initDriver Failed 中止，请检查网络/" +
+					"代理/VPN 路由后重试（CN 服务器不依赖该地址）。"}
+			}
+		}
+
 		// System dwproton (a Proton build with Dawn Winery gacha-game fixes).
 		proton := findDwproton()
 		if proton != "" {
@@ -130,8 +155,10 @@ func (m *model) launchGame() tea.Cmd {
 				ch <- launchGameFailedMsg{text: err.Error()}
 				return
 			}
-			// aagl-style launch args: borderless + popup window.
-			args := []string{"run", exe, "-screen-fullscreen", "0", "-popupwindow"}
+			// aagl-style launch args: borderless + popup window. The
+			// "waitforexitandrun" verb (not "run") is required so dwproton's
+			// game-specific protonfixes execute (check_conditions() demands it).
+			args := []string{"waitforexitandrun", exe, "-screen-fullscreen", "0", "-popupwindow"}
 			cmd := exec.Command(proton, args...)
 			cmd.Dir = gameDir
 			// Run in a new session so the game is fully detached from the TUI's
@@ -139,7 +166,7 @@ func (m *model) launchGame() tea.Cmd {
 			cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 			cmd.Stdin = nil
 			steamRoot := filepath.Dir(filepath.Dir(filepath.Dir(proton)))
-			cmd.Env = append(os.Environ(),
+			env := append(os.Environ(),
 				"WINEARCH=win64",
 				"WINEPREFIX="+prefix,
 				"STEAM_COMPAT_DATA_PATH="+prefix,
@@ -147,6 +174,13 @@ func (m *model) launchGame() tea.Cmd {
 				"WINE_ENABLE_TIMEOUT_FIX=1",
 				"PROTON_USE_WINED3D=0",
 			)
+			// Let dwproton apply the game-specific fixes (umu-genshin makes it
+			// run GenshinImpact.exe from its steam.exe shim for the anti-cheat
+			// driver emulation).
+			if umuID := m.currentEdition().UMUID(); umuID != "" {
+				env = append(env, "UMU_ID="+umuID)
+			}
+			cmd.Env = env
 			logPath := filepath.Join(gameDir, "launcher_launch.log")
 			var logFile *os.File
 			if f, err := os.Create(logPath); err == nil {

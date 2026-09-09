@@ -255,39 +255,6 @@ func TestConvertInstallBothPresent(t *testing.T) {
 	}
 }
 
-func TestManageRootFiles(t *testing.T) {
-	dir := t.TempDir()
-	backupRoot := filepath.Join(t.TempDir(), "backup")
-
-	// A CN-installed dir (CN anti-cheat files present); switching to oversea.
-	for _, f := range edition.OfficialCN.RootFiles {
-		os.WriteFile(filepath.Join(dir, f), []byte("cn"), 0o644)
-	}
-
-	if err := ManageRootFiles(dir, edition.Oversea, backupRoot); err != nil {
-		t.Fatalf("ManageRootFiles oversea: %v", err)
-	}
-	// CN anti-cheat files must leave the dir (they crash the oversea game).
-	for _, f := range edition.OfficialCN.RootFiles {
-		if _, err := os.Stat(filepath.Join(dir, f)); !os.IsNotExist(err) {
-			t.Errorf("%s should be moved away for oversea: %v", f, err)
-		}
-		if _, err := os.Stat(filepath.Join(backupRoot, edition.OfficialCN.DataFolder, f)); err != nil {
-			t.Errorf("%s should be in CN backup: %v", f, err)
-		}
-	}
-
-	// Switching back to CN restores them.
-	if err := ManageRootFiles(dir, edition.OfficialCN, backupRoot); err != nil {
-		t.Fatalf("ManageRootFiles cn restore: %v", err)
-	}
-	for _, f := range edition.OfficialCN.RootFiles {
-		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
-			t.Errorf("%s should be restored for CN: %v", f, err)
-		}
-	}
-}
-
 func TestFixPkgVersion(t *testing.T) {
 	dir := t.TempDir()
 	pv := `{"remoteName": "GenshinImpact_Data/Managed/x.dat", "md5": "a", "hash": "b", "fileSize": 1}` + "\n"

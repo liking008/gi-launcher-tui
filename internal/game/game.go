@@ -326,35 +326,6 @@ func ManagePCSDK(dir string, target edition.Edition, backupRoot string) error {
 	return os.Rename(sdk, backupDLL)
 }
 
-// ManageRootFiles keeps edition-specific root-level files (anti-cheat DLLs,
-// etc.) in sync with the active server. Files owned by another server family
-// are moved into that family's backup slot (the CN anti-cheat DLLs must not sit
-// in the oversea install or GenshinImpact.exe aborts with "initDriver Failed");
-// the target family's own files are restored from backup.
-func ManageRootFiles(dir string, target edition.Edition, backupRoot string) error {
-	for _, e := range edition.All() {
-		if e.Key == target.Key || e.DataFolder == target.DataFolder {
-			continue
-		}
-		b := filepath.Join(backupRoot, e.DataFolder)
-		if err := os.MkdirAll(b, 0o755); err != nil {
-			return err
-		}
-		for _, f := range e.RootFiles {
-			if err := moveAway(filepath.Join(dir, f), b); err != nil {
-				return err
-			}
-		}
-	}
-	b := filepath.Join(backupRoot, target.DataFolder)
-	for _, f := range target.RootFiles {
-		if err := moveAway(filepath.Join(b, f), dir); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // moveAway relocates src into backupDir, removing any existing entry there.
 // Missing sources are a no-op; errors on vanished files are tolerated so a
 // partially-moved install never aborts tidy.

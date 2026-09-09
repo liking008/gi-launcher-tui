@@ -308,11 +308,6 @@ func (m *model) tidyNow() tea.Cmd {
 		// Rewrite pkg_version manifests to reference the active data folder.
 		game.FixPkgVersion(installDir, target)
 
-		// Move/restore edition-specific root files (CN anti-cheat DLLs).
-		if err := game.ManageRootFiles(installDir, target, backupRoot); err != nil {
-			return tidyMsg{err: fmt.Errorf("整理根目录文件失败: %w", err)}
-		}
-
 		// Keep the Bilibili-only PCGameSDK.dll in sync (restore or download).
 		if err := m.ensurePCSDK(installDir, target, backupRoot); err != nil {
 			return tidyMsg{err: fmt.Errorf("PCGameSDK.dll: %w", err)}
@@ -707,9 +702,6 @@ func (m *model) finalizeSwitch() tea.Cmd {
 		}
 		if err := game.ConvertInstall(installDir, target, backupRoot); err != nil {
 			return installMsg{err: fmt.Errorf("整理旧版本文件失败: %w", err)}
-		}
-		if err := game.ManageRootFiles(installDir, target, backupRoot); err != nil {
-			return installMsg{err: fmt.Errorf("整理根目录文件失败: %w", err)}
 		}
 		return installMsg{}
 	}
