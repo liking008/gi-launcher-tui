@@ -74,6 +74,7 @@ func (m *model) navigate(p page) tea.Cmd {
 type launchDoneMsg struct{ text string }
 type launchGameStartedMsg struct{ text string }
 type launchGameFailedMsg struct{ text string }
+type launchGameExitedMsg struct{ text string }
 
 // gameProcessRunning reports whether the game executable is running.
 func gameProcessRunning(exeName string) bool {
@@ -92,6 +93,27 @@ func reachableHTTPS(host string) bool {
 	}
 	resp.Body.Close()
 	return true
+}
+
+// watchGameExit keeps polling the game process after it started and reports a
+// launchGameExitedMsg once it has stayed gone for a while (tolerating brief
+// restarts such as the game relaunching itself through its anti-cheat).
+func watchGameExit(ch chan<- tea.Msg, exeName string) {
+	const poll = 3 * time.Second
+	const confirm = 6 // 6 consecutive misses (~18s) before declaring exit
+	misses := 0
+	for {
+		time.Sleep(poll)
+		if gameProcessRunning(exeName) {
+			misses = 0
+			continue
+		}
+		misses++
+		if misses >= confirm {
+			ch <- launchGameExitedMsg{text: "游戏已退出"}
+			return
+		}
+	}
 }
 
 // subscribeLaunch waits for the game-process detector result.
@@ -203,6 +225,8 @@ func (m *model) launchGame() tea.Cmd {
 					ch <- launchGameStartedMsg{text: fmt.Sprintf(
 						"游戏进程已启动（%s）\n窗口可能需要一些时间出现\nprefix: %s\n日志: %s",
 						exeName, prefix, logPath)}
+					// Keep watching so the UI reflects when the game exits.
+					watchGameExit(ch, exeName)
 					return
 				}
 				time.Sleep(1 * time.Second)

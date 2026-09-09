@@ -28,6 +28,7 @@ func (m *model) goMenu(key string) tea.Cmd {
 	switch key {
 	case "launch":
 		m.launching = true
+		m.launchExited = false
 		m.launchMsg = "正在初始化 wine prefix（首次需 1-2 分钟）..."
 		return m.launchGame()
 	case "verify":
@@ -57,6 +58,8 @@ func (m *model) viewHome() string {
 	sub := accentStyle("版本 "+version) + "  " + infoStyle(installed) + "  " + infoStyle("["+g.Edition().Name+"]")
 	if m.launching {
 		sub += "\n" + m.spinner.View() + infoStyle(m.launchMsg)
+	} else if m.launchExited {
+		sub += "\n" + infoStyle(m.launchMsg)
 	}
 	if m.err != nil {
 		sub += "\n" + errStyle(m.err.Error())

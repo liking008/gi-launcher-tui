@@ -69,9 +69,10 @@ type model struct {
 	tidyErr     error
 
 	// launch status feedback
-	launching bool
-	launchMsg string
-	launchCh  chan tea.Msg
+	launching    bool
+	launchMsg    string
+	launchExited bool
+	launchCh     chan tea.Msg
 }
 
 // Msg types
@@ -176,6 +177,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.subscribeLaunch()
 	case launchGameStartedMsg:
 		m.launching = true
+		m.launchMsg = msg.text
+		return m, m.subscribeLaunch()
+	case launchGameExitedMsg:
+		m.launching = false
+		m.launchExited = true
 		m.launchMsg = msg.text
 		return m, nil
 	case launchGameFailedMsg:
