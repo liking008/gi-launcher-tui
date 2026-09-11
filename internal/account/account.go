@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -102,12 +103,13 @@ func (s *Store) Rename(old, new string) error {
 
 // Apply writes the profile's auto-login blob into the wine prefix registry so
 // the game starts with that account. key/value identify the MIHOYOSDK registry
-// entry for the active edition (see edition.RegistryKeyValue).
-func (s *Store) Apply(prefix, key, value string, p Profile) error {
+// entry for the active edition (see edition.RegistryKeyValue). wine is the wine
+// binary used to reach the live registry (may be empty to edit user.reg).
+func (s *Store) Apply(wine, prefix, key, value string, p Profile) error {
 	if p.MihoyoSDK == "" {
 		return fmt.Errorf("账号 %s 没有保存的登录数据", p.Name)
 	}
-	return SetRegistryBinary(prefix, key, value, p.MihoyoSDK)
+	return SetRegistryBinary(wine, prefix, key, value, p.MihoyoSDK)
 }
 
 // userRegPath locates the HKCU registry backing file inside a wine prefix.
@@ -182,10 +184,82 @@ func writeAtomic(path string, lines []string) error {
 	return os.Rename(tmp, path)
 }
 
-// SetRegistryBinary writes a REG_BINARY value into a key section of the prefix's
-// user.reg, creating the section if needed. The value is the UTF-8 blob followed
-// by a NUL terminator, exactly as the game SDK expects.
-func SetRegistryBinary(prefix, key, valueName, blob string) error {
+// SetRegistryBinary writes a REG_BINARY value to the active registry. When wine
+// is given it goes through `wine reg` so a running game sees the change and the
+// live value is updated; otherwise the on-disk user.reg is edited directly.
+func SetRegistryBinary(wine, prefix, key, valueName, blob string) error {
+	if wine != "" {
+		if err := setRegistryBinaryLive(wine, prefix, key, valueName, blob); err == nil {
+			return nil
+		}
+	}
+	return setRegistryBinaryFile(prefix, key, valueName, blob)
+}
+
+// ReadRegistryBinary reads a REG_BINARY value from the active registry. When
+// wine is given it queries the live registry (a running game's login data is
+// held in wineserver memory and only flushed to user.reg on exit, so reading the
+// file would be stale); otherwise it parses user.reg.
+func ReadRegistryBinary(wine, prefix, key, valueName string) (string, bool) {
+	if wine != "" {
+		if v, ok := readRegistryBinaryLive(wine, prefix, key, valueName); ok {
+			return v, true
+		}
+	}
+	return readRegistryBinaryFile(prefix, key, valueName)
+}
+
+// wineReg runs a `wine reg` subcommand against prefix and returns its output.
+func wineReg(wine, prefix string, args ...string) (string, error) {
+	cmd := exec.Command(wine, append([]string{"reg"}, args...)...)
+	cmd.Env = append(os.Environ(), "WINEPREFIX="+prefix)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// hkcuKey qualifies a HKCU-relative registry path (the form used in user.reg)
+// with the root that `wine reg` expects.
+func hkcuKey(key string) string {
+	if strings.HasPrefix(key, "HKCU") || strings.HasPrefix(key, "HKEY_") {
+		return key
+	}
+	return `HKCU\` + key
+}
+
+// setRegistryBinaryLive writes via `wine reg add`, reaching the live registry.
+func setRegistryBinaryLive(wine, prefix, key, valueName, blob string) error {
+	hexData := hex.EncodeToString([]byte(blob + "\x00"))
+	_, err := wineReg(wine, prefix, "add", hkcuKey(key), "/v", valueName,
+		"/t", "REG_BINARY", "/d", hexData, "/f")
+	return err
+}
+
+// readRegistryBinaryLive queries via `wine reg query` and parses the REG_BINARY
+// hex dump, returning the blob without its trailing NUL.
+func readRegistryBinaryLive(wine, prefix, key, valueName string) (string, bool) {
+	out, err := wineReg(wine, prefix, "query", hkcuKey(key), "/v", valueName)
+	if err != nil {
+		return "", false
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if !strings.Contains(line, "REG_BINARY") {
+			continue
+		}
+		hexStr := strings.TrimSpace(line[strings.Index(line, "REG_BINARY")+len("REG_BINARY"):])
+		hexStr = strings.NewReplacer(",", "", " ", "").Replace(hexStr)
+		raw, err := hex.DecodeString(hexStr)
+		if err != nil {
+			return "", false
+		}
+		return strings.TrimSuffix(string(raw), "\x00"), true
+	}
+	return "", false
+}
+
+// setRegistryBinaryFile writes a REG_BINARY value into a key section of the
+// prefix's user.reg, creating the section if needed. The value is the UTF-8 blob
+// followed by a NUL terminator, exactly as the game SDK expects.
+func setRegistryBinaryFile(prefix, key, valueName, blob string) error {
 	path := userRegPath(prefix)
 	var lines []string
 	data, err := os.ReadFile(path)
@@ -241,9 +315,9 @@ func SetRegistryBinary(prefix, key, valueName, blob string) error {
 	return writeAtomic(path, lines)
 }
 
-// ReadRegistryBinary reads a REG_BINARY value from the prefix's user.reg,
+// readRegistryBinaryFile parses a REG_BINARY value from the prefix's user.reg,
 // returning the blob without its trailing NUL. ok is false when absent.
-func ReadRegistryBinary(prefix, key, valueName string) (string, bool) {
+func readRegistryBinaryFile(prefix, key, valueName string) (string, bool) {
 	data, err := os.ReadFile(userRegPath(prefix))
 	if err != nil {
 		return "", false

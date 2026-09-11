@@ -2,6 +2,9 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -68,6 +71,21 @@ func (m *model) registryTarget() (prefix, key, value string, err error) {
 	return m.cfg.WinePrefix, key, value, nil
 }
 
+// wineBinary locates the wine binary used to reach the prefix's live registry.
+// dwproton ships it under <proton dir>/files/bin/wine.
+func (m *model) wineBinary() string {
+	if p := findDwproton(); p != "" {
+		w := filepath.Join(filepath.Dir(p), "files", "bin", "wine")
+		if _, err := os.Stat(w); err == nil {
+			return w
+		}
+	}
+	if w, err := exec.LookPath("wine"); err == nil {
+		return w
+	}
+	return ""
+}
+
 // saveCurrentAccount captures the MIHOYOSDK blob currently in the prefix and
 // stores it as a new account record, mirroring Snap.Hutao's save flow.
 func (m *model) saveCurrentAccount() tea.Cmd {
@@ -76,7 +94,7 @@ func (m *model) saveCurrentAccount() tea.Cmd {
 		if err != nil {
 			return errMsg{err: err}
 		}
-		blob, ok := account.ReadRegistryBinary(prefix, key, value)
+		blob, ok := account.ReadRegistryBinary(m.wineBinary(), prefix, key, value)
 		if !ok {
 			return errMsg{err: fmt.Errorf("当前 prefix 未检测到登录数据，请先在游戏中登录一次")}
 		}
@@ -160,7 +178,7 @@ func (m *model) applyAccount() tea.Cmd {
 		if err != nil {
 			return errMsg{err: err}
 		}
-		if err := m.acc.Apply(prefix, key, value, p); err != nil {
+		if err := m.acc.Apply(m.wineBinary(), prefix, key, value, p); err != nil {
 			return errMsg{err: err}
 		}
 		m.cfg.ActiveAccount = p.Name

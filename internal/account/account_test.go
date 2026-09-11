@@ -12,10 +12,10 @@ func TestSetReadRegistryBinaryRoundTrip(t *testing.T) {
 	value := "MIHOYOSDK_ADL_PROD_CN_h3123967166"
 
 	blob := "MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAw"
-	if err := SetRegistryBinary(prefix, key, value, blob); err != nil {
+	if err := SetRegistryBinary("", prefix, key, value, blob); err != nil {
 		t.Fatal(err)
 	}
-	got, ok := ReadRegistryBinary(prefix, key, value)
+	got, ok := ReadRegistryBinary("", prefix, key, value)
 	if !ok {
 		t.Fatal("expected blob to be readable")
 	}
@@ -29,13 +29,13 @@ func TestSetReplacesExistingValue(t *testing.T) {
 	key := `Software\miHoYo\原神`
 	value := "MIHOYOSDK_ADL_PROD_CN_h3123967166"
 
-	if err := SetRegistryBinary(prefix, key, value, "first"); err != nil {
+	if err := SetRegistryBinary("", prefix, key, value, "first"); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetRegistryBinary(prefix, key, value, "second-value"); err != nil {
+	if err := SetRegistryBinary("", prefix, key, value, "second-value"); err != nil {
 		t.Fatal(err)
 	}
-	got, ok := ReadRegistryBinary(prefix, key, value)
+	got, ok := ReadRegistryBinary("", prefix, key, value)
 	if !ok || got != "second-value" {
 		t.Fatalf("replacement failed: got %q ok=%v", got, ok)
 	}
@@ -52,7 +52,7 @@ func TestEscapedKeyReadFromExistingFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(prefix, "user.reg"), []byte(reg), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, ok := ReadRegistryBinary(prefix, `Software\miHoYo\原神`, "MIHOYOSDK_ADL_PROD_CN_h3123967166")
+	got, ok := ReadRegistryBinary("", prefix, `Software\miHoYo\原神`, "MIHOYOSDK_ADL_PROD_CN_h3123967166")
 	if !ok || got != "abcde" {
 		t.Fatalf("expected abcde, got %q ok=%v", got, ok)
 	}
@@ -72,19 +72,19 @@ func TestReadFromProtonPfxSubdir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(pfx, "user.reg"), []byte(reg), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, ok := ReadRegistryBinary(prefix, `Software\miHoYo\原神`, "MIHOYOSDK_ADL_PROD_CN_h3123967166")
+	got, ok := ReadRegistryBinary("", prefix, `Software\miHoYo\原神`, "MIHOYOSDK_ADL_PROD_CN_h3123967166")
 	if !ok || got != "abcdef" {
 		t.Fatalf("expected abcdef from pfx subdir, got %q ok=%v", got, ok)
 	}
 
 	// Set must also edit the pfx user.reg, not create a fresh direct one.
-	if err := SetRegistryBinary(prefix, `Software\miHoYo\原神`, "MIHOYOSDK_ADL_PROD_CN_h3123967166", "newblob"); err != nil {
+	if err := SetRegistryBinary("", prefix, `Software\miHoYo\原神`, "MIHOYOSDK_ADL_PROD_CN_h3123967166", "newblob"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(prefix, "user.reg")); err == nil {
 		t.Fatal("should not create user.reg at prefix root when pfx/user.reg exists")
 	}
-	got, ok = ReadRegistryBinary(prefix, `Software\miHoYo\原神`, "MIHOYOSDK_ADL_PROD_CN_h3123967166")
+	got, ok = ReadRegistryBinary("", prefix, `Software\miHoYo\原神`, "MIHOYOSDK_ADL_PROD_CN_h3123967166")
 	if !ok || got != "newblob" {
 		t.Fatalf("expected newblob after Set, got %q ok=%v", got, ok)
 	}
