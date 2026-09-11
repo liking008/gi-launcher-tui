@@ -210,9 +210,13 @@ func ReadRegistryBinary(wine, prefix, key, valueName string) (string, bool) {
 }
 
 // wineReg runs a `wine reg` subcommand against prefix and returns its output.
+// WINEPREFIX must be the directory that actually holds user.reg: proton (used
+// to launch the game) puts it under <prefix>/pfx, while the config points at
+// the parent, so resolve it from userRegPath.
 func wineReg(wine, prefix string, args ...string) (string, error) {
+	realPrefix := filepath.Dir(userRegPath(prefix))
 	cmd := exec.Command(wine, append([]string{"reg"}, args...)...)
-	cmd.Env = append(os.Environ(), "WINEPREFIX="+prefix)
+	cmd.Env = append(os.Environ(), "WINEPREFIX="+realPrefix)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
