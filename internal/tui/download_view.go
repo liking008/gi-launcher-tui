@@ -69,6 +69,19 @@ func (m *model) viewDownload() string {
 		}
 		body.WriteString(infoStyle("安装目录: "+st.installDir) + "\n\n")
 
+		// Local scan phase: hashing files can take a while, so show activity
+		// instead of a frozen 0% bar.
+		if st.scanning {
+			scanned := ""
+			if st.scanTotal > 0 {
+				scanned = fmt.Sprintf(" (已扫描 %d/%d)", st.scanScanned, st.scanTotal)
+			}
+			body.WriteString(m.spinner.View() + accentStyle(fmt.Sprintf(" 正在扫描本地文件，校验缺失/损坏%s...", scanned)) + "\n")
+			body.WriteString(infoStyle("  "+st.scanName) + "\n")
+			body.WriteString("\n" + hintStyle("只下载缺失/损坏的部分，请稍候 · esc 返回"))
+			return lipglossBox(m.width, head+"\n\n"+body.String())
+		}
+
 		// Overall progress bar.
 		body.WriteString(overallBar(m, st) + "\n\n")
 

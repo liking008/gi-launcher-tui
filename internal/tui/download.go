@@ -83,6 +83,12 @@ type downloadState struct {
 	installStep string // "" | "installing" | "done" | "failed"
 	installErr  error
 	scanInfo    string // last scan summary (files/bytes that need download)
+
+	// local scan state (before downloading)
+	scanning    bool
+	scanName    string
+	scanScanned int
+	scanTotal   int
 }
 
 type (
@@ -112,6 +118,11 @@ type (
 		name  string
 		need  int
 		bytes int64
+	}
+	dlScanStartMsg    struct{ name string }
+	dlScanProgressMsg struct {
+		name           string
+		scanned, total int
 	}
 	dlFinished struct {
 		name  string
@@ -185,8 +196,24 @@ func (m *model) updateDownload(msg tea.Msg) tea.Cmd {
 			m.dl.installStep = "verified"
 		}
 		return m.subscribe()
+	case dlScanStartMsg:
+		if m.dl != nil {
+			m.dl.scanning = true
+			m.dl.scanName = msg.name
+			m.dl.scanScanned, m.dl.scanTotal = 0, 0
+			m.dl.scanInfo = ""
+		}
+		return m.subscribe()
+	case dlScanProgressMsg:
+		if m.dl != nil {
+			m.dl.scanning = true
+			m.dl.scanName = msg.name
+			m.dl.scanScanned, m.dl.scanTotal = msg.scanned, msg.total
+		}
+		return m.subscribe()
 	case dlScanMsg:
 		if m.dl != nil {
+			m.dl.scanning = false
 			if msg.need == 0 {
 				m.dl.scanInfo = fmt.Sprintf("[%s] 扫描完成：本地文件完整，无需下载", msg.name)
 			} else {
@@ -607,6 +634,12 @@ func (m *model) startSophonDownload() tea.Cmd {
 					ReuseContent: true,
 					ReuseIndex:   idx,
 					ReuseAltRoot: altRoot,
+					OnScanStart: func() {
+						ch <- dlScanStartMsg{name: c.CategoryName}
+					},
+					OnScanProgress: func(scanned, total int) {
+						ch <- dlScanProgressMsg{name: c.CategoryName, scanned: scanned, total: total}
+					},
 					OnScan: func(need int, bytes int64) {
 						ch <- dlScanMsg{name: c.CategoryName, need: need, bytes: bytes}
 					},

@@ -118,6 +118,12 @@ type Options struct {
 	// are missing or damaged and the total bytes those files need. Only these
 	// files are (re)downloaded.
 	OnScan func(needFiles int, needBytes int64)
+	// OnScanStart is called before the manifest fetch + local scan begins, so
+	// the UI can show that a (possibly slow) scan is running.
+	OnScanStart func()
+	// OnScanProgress is called periodically during the local scan with the
+	// number of files examined so far and the total in the manifest.
+	OnScanProgress func(scanned, total int)
 	// Progress is invoked with (written, total) bytes as assets complete.
 	Progress func(done, total int64)
 }
@@ -127,6 +133,9 @@ type Options struct {
 // ReuseContent, matching content found elsewhere in the install is copied
 // instead of re-downloaded. Returns the number of bytes written.
 func DownloadAssets(ctx context.Context, hc *http.Client, comp *Component, installDir string, opts Options) (int64, error) {
+	if opts.OnScanStart != nil {
+		opts.OnScanStart()
+	}
 	assets, err := FetchManifest(ctx, hc, comp)
 	if err != nil {
 		return 0, err
@@ -140,7 +149,7 @@ func DownloadAssets(ctx context.Context, hc *http.Client, comp *Component, insta
 	// update repairs just the wrong parts instead of rewriting everything.
 	var todo []Asset
 	var total int64
-	for _, a := range assets {
+	for i, a := range assets {
 		if a.Type == 64 { // directory
 			if a.Path != "" {
 				os.MkdirAll(filepath.Join(installDir, filepath.FromSlash(a.Path)), 0o755)
@@ -155,6 +164,12 @@ func DownloadAssets(ctx context.Context, hc *http.Client, comp *Component, insta
 		}
 		todo = append(todo, a)
 		total += a.Size
+		if opts.OnScanProgress != nil && (i+1)%128 == 0 {
+			opts.OnScanProgress(i+1, len(assets))
+		}
+	}
+	if opts.OnScanProgress != nil {
+		opts.OnScanProgress(len(assets), len(assets))
 	}
 	if opts.OnScan != nil {
 		opts.OnScan(len(todo), total)
