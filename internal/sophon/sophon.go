@@ -167,13 +167,16 @@ func DownloadAssets(ctx context.Context, hc *http.Client, comp *Component, insta
 			return written, err
 		}
 
-		// 1) Already present at the target with the same size -> skip. Size is
-		//    used instead of MD5 so files changed by in-game hot updates (which
-		//    keep block files the same size) are preserved, not re-downloaded.
+		// 1) Already present AND correct -> skip. Content is verified by MD5,
+		//    not just size, so a same-size damaged/incorrect file is repaired by
+		//    re-downloading it. In-game hot-update blocks live under Persistent/
+		//    and are not listed in the manifest, so they are never touched here.
 		if opts.SkipExisting && fileSize(dest) == a.Size {
-			written += a.Size
-			report()
-			continue
+			if a.HashMD5 == "" || strings.EqualFold(md5File(dest), a.HashMD5) {
+				written += a.Size
+				report()
+				continue
+			}
 		}
 		// 2) Content exists elsewhere in the install -> copy it.
 		if opts.ReuseContent && a.HashMD5 != "" {

@@ -233,6 +233,59 @@ func TestReuseHardlinksSharedFiles(t *testing.T) {
 	}
 }
 
+func TestDownloadAssetsRepairsDamagedSameSize(t *testing.T) {
+	// Same byte length as the correct content, but different bytes.
+	correct := "correct-content"
+	damaged := "damaged-content"
+	if len(correct) != len(damaged) {
+		t.Fatalf("test setup: lengths differ %d != %d", len(correct), len(damaged))
+	}
+
+	installDir := t.TempDir()
+	target := filepath.Join(installDir, "GenshinImpact_Data", "x.dat")
+	os.MkdirAll(filepath.Dir(target), 0o755)
+	os.WriteFile(target, []byte(damaged), 0o644)
+
+	chunk := pbBytes(1, "c_x")
+	chunk = append(chunk, pbVarint(3, 0)...)
+	chunk = append(chunk, pbVarint(4, uint64(len(correct)))...)
+	chunk = append(chunk, pbVarint(5, uint64(len(correct)))...)
+	asset := buildAsset("GenshinImpact_Data/x.dat", chunk, md5Hex(correct), uint64(len(correct)))
+	manifestData := buildManifest(t, [][]byte{asset})
+
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/manifest_1" {
+			w.Write(manifestData)
+			return
+		}
+		if r.URL.Path == "/c_x" {
+			hits.Add(1)
+			w.Write([]byte(correct))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	comp := &Component{
+		Manifest:         ManifestInfo{ID: "manifest_1"},
+		ManifestDownload: DownloadConfig{URLPrefix: srv.URL},
+		ChunkDownload:    DownloadConfig{URLPrefix: srv.URL},
+	}
+	if _, err := DownloadAssets(context.Background(), srv.Client(), comp, installDir,
+		Options{SkipExisting: true}); err != nil {
+		t.Fatalf("DownloadAssets: %v", err)
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("expected damaged same-size file to be re-downloaded, got %d chunk hits", got)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil || string(data) != correct {
+		t.Fatalf("file not repaired: %v %q", err, data)
+	}
+}
+
 func TestDownloadAssetsSkipExisting(t *testing.T) {
 	content := "already-valid-content"
 	installDir := t.TempDir()
