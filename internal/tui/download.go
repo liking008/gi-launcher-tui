@@ -21,6 +21,7 @@ import (
 	"github.com/liking008/gi-launcher-tui/internal/download"
 	"github.com/liking008/gi-launcher-tui/internal/edition"
 	"github.com/liking008/gi-launcher-tui/internal/game"
+	"github.com/liking008/gi-launcher-tui/internal/manifest"
 	"github.com/liking008/gi-launcher-tui/internal/patch"
 	"github.com/liking008/gi-launcher-tui/internal/resource"
 	"github.com/liking008/gi-launcher-tui/internal/sophon"
@@ -257,6 +258,12 @@ func (m *model) updateDownload(msg tea.Msg) tea.Cmd {
 			if msg.err != nil {
 				m.dl.installStep = "failed"
 				m.dl.installErr = msg.err
+				return nil
+			}
+			// Classic patch / full install finish here: clean the other
+			// family's files and any obsolete resources too.
+			if !m.dl.finalized {
+				return m.finalizeSwitch()
 			}
 		}
 		return nil
@@ -313,6 +320,15 @@ func (m *model) tidyNow() tea.Cmd {
 			return tidyMsg{err: fmt.Errorf("PCGameSDK.dll: %w", err)}
 		}
 
+		// 2b) Move the active data folder's obsolete files (not listed by the
+		// current manifest) into backup, so old-version resources don't linger.
+		// Files under Persistent (in-game hot-update blocks) are preserved.
+		wanted := manifestPaths(installDir)
+		if target.NeedsSDK {
+			wanted[game.PCSDK] = true
+		}
+		obsolete, _ := game.CleanObsolete(installDir, target, backupRoot, wanted)
+
 		// 3) Compare against the target manifest and reconcile.
 		restored := 0
 		var remainingBytes int64
@@ -342,10 +358,10 @@ func (m *model) tidyNow() tea.Cmd {
 						}{filepath.ToSlash(a.Path), a.Size})
 					}
 				}
-				// Note: files in the data folder that are NOT in the manifest
-				// (e.g. added by in-game hot updates) are intentionally left in
-				// place, mirroring Snap.Hutao / aagl — moving them would cause
-				// re-downloads after every hot update.
+				// Note: the reconcile below only restores/adds manifest files.
+				// Files that are NOT in the manifest (old-version or other-server
+				// leftovers) are moved to backup by CleanObsolete above, except
+				// Persistent hot-update blocks, which are intentionally kept.
 				// Restore/account for missing manifest files.
 				for _, a := range allAssets {
 					dest := filepath.Join(installDir, filepath.FromSlash(a.path))
@@ -366,7 +382,7 @@ func (m *model) tidyNow() tea.Cmd {
 			}
 		}
 
-		msg := fmt.Sprintf("整理完成：已重命名/保留共享资源，从备份恢复 %d 个文件，另一版本独有文件已整理到备份", restored)
+		msg := fmt.Sprintf("整理完成：已重命名/保留共享资源，从备份恢复 %d 个文件，清理旧版/多余文件 %d 个，另一版本独有文件已整理到备份", restored, obsolete)
 		if remainingBytes > 0 {
 			msg += fmt.Sprintf("\n当前服务器仍缺 %s，请按 d 下载补齐（将复用已有资源）。", humanBytes(remainingBytes))
 		}
@@ -688,7 +704,9 @@ func joinZipParts(parts []string, downloadDir string) (string, error) {
 
 // finalizeSwitch moves the previous edition's redundant files (exe + data
 // folder) to a backup directory after the target edition has been downloaded,
-// mirroring Snap.Hutao's server-switch-in-place approach.
+// mirroring Snap.Hutao's server-switch-in-place approach. It also moves the
+// active data folder's obsolete files (not listed by the current manifest) into
+// backup, so an update never leaves the old version's resources behind.
 func (m *model) finalizeSwitch() tea.Cmd {
 	m.dl.finalized = true
 	m.dl.installStep = "installing"
@@ -703,8 +721,30 @@ func (m *model) finalizeSwitch() tea.Cmd {
 		if err := game.ConvertInstall(installDir, target, backupRoot); err != nil {
 			return installMsg{err: fmt.Errorf("整理旧版本文件失败: %w", err)}
 		}
+		if _, err := game.CleanObsolete(installDir, target, backupRoot, manifestPaths(installDir)); err != nil {
+			return installMsg{err: fmt.Errorf("清理旧版本资源失败: %w", err)}
+		}
 		return installMsg{}
 	}
+}
+
+// manifestPaths collects the slash-separated install-relative paths listed by
+// the install's pkg_version manifests (pkg_version + Audio_*_pkg_version etc.).
+func manifestPaths(installDir string) map[string]bool {
+	out := map[string]bool{}
+	paths, _ := filepath.Glob(filepath.Join(installDir, "*pkg_version"))
+	for _, p := range paths {
+		mf, err := manifest.Load(p)
+		if err != nil {
+			continue
+		}
+		for _, fe := range mf.Files {
+			if fe.RemoteName != "" {
+				out[fe.RemoteName] = true
+			}
+		}
+	}
+	return out
 }
 
 // altDataFolderPath returns the path to the other server family's data folder

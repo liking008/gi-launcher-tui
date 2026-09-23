@@ -255,6 +255,64 @@ func TestConvertInstallBothPresent(t *testing.T) {
 	}
 }
 
+func TestCleanObsolete(t *testing.T) {
+	dir := t.TempDir()
+	backupRoot := filepath.Join(t.TempDir(), "backup")
+	df := edition.Oversea.DataFolder // GenshinImpact_Data
+
+	write := func(rel, body string) {
+		p := filepath.Join(dir, filepath.FromSlash(rel))
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(body), 0o644)
+	}
+	write(df+"/Managed/keep.dll", "keep")
+	write(df+"/Managed/old.dll", "old")
+	write(df+"/Resources/removed.dat", "old")
+	// Hot-update blocks are not in the manifest but must survive.
+	write(df+"/Persistent/AssetBundles/blocks/00/abc.blk", "hot")
+
+	wanted := map[string]bool{
+		df + "/Managed/keep.dll": true,
+	}
+	moved, err := CleanObsolete(dir, edition.Oversea, backupRoot, wanted)
+	if err != nil {
+		t.Fatalf("CleanObsolete: %v", err)
+	}
+	if moved != 2 {
+		t.Errorf("expected 2 files moved, got %d", moved)
+	}
+	if _, err := os.Stat(filepath.Join(dir, df, "Managed", "keep.dll")); err != nil {
+		t.Errorf("manifest file should be kept: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, df, "Managed", "old.dll")); !os.IsNotExist(err) {
+		t.Errorf("obsolete file should be moved away: %v", err)
+	}
+	// Moved into backup/<DataFolder>/obsolete/...
+	b := filepath.Join(backupRoot, df, "obsolete", df, "Resources", "removed.dat")
+	if _, err := os.Stat(b); err != nil {
+		t.Errorf("obsolete file should be in backup: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, df, "Persistent", "AssetBundles", "blocks", "00", "abc.blk")); err != nil {
+		t.Errorf("Persistent hot-update block should be preserved: %v", err)
+	}
+}
+
+func TestCleanObsoleteEmptyWantedSkips(t *testing.T) {
+	dir := t.TempDir()
+	backupRoot := filepath.Join(t.TempDir(), "backup")
+	p := filepath.Join(dir, edition.Oversea.DataFolder, "x.dat")
+	os.MkdirAll(filepath.Dir(p), 0o755)
+	os.WriteFile(p, []byte("x"), 0o644)
+
+	moved, err := CleanObsolete(dir, edition.Oversea, backupRoot, nil)
+	if err != nil || moved != 0 {
+		t.Fatalf("empty wanted must skip: moved=%d err=%v", moved, err)
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Errorf("file must remain when wanted is empty: %v", err)
+	}
+}
+
 func TestFixPkgVersion(t *testing.T) {
 	dir := t.TempDir()
 	pv := `{"remoteName": "GenshinImpact_Data/Managed/x.dat", "md5": "a", "hash": "b", "fileSize": 1}` + "\n"

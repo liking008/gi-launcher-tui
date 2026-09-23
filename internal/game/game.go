@@ -326,6 +326,56 @@ func ManagePCSDK(dir string, target edition.Edition, backupRoot string) error {
 	return os.Rename(sdk, backupDLL)
 }
 
+// CleanObsolete moves files inside the active data folder that are not listed
+// in the current manifest into backupRoot/<DataFolder>/obsolete, so an update
+// does not leave the previous version's files (or the other server family's)
+// behind. Files under a "Persistent" directory are kept: in-game hot-update
+// blocks are not listed in pkg_version and must survive. Nothing is deleted.
+// An empty wanted set is treated as "unknown" and skips the operation.
+func CleanObsolete(dir string, target edition.Edition, backupRoot string, wanted map[string]bool) (int, error) {
+	if len(wanted) == 0 {
+		return 0, nil
+	}
+	dataDir := filepath.Join(dir, target.DataFolder)
+	if _, err := os.Stat(dataDir); err != nil {
+		return 0, nil
+	}
+	moved := 0
+	err := filepath.Walk(dataDir, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		rel, rerr := filepath.Rel(dir, p)
+		if rerr != nil {
+			return nil
+		}
+		relSlash := filepath.ToSlash(rel)
+		if wanted[relSlash] || hasSegment(relSlash, "Persistent") {
+			return nil
+		}
+		dest := filepath.Join(backupRoot, target.DataFolder, "obsolete", filepath.FromSlash(relSlash))
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return err
+		}
+		if err := moveAway(p, filepath.Dir(dest)); err != nil {
+			return err
+		}
+		moved++
+		return nil
+	})
+	return moved, err
+}
+
+// hasSegment reports whether path (slash-separated) contains an exact segment.
+func hasSegment(path, seg string) bool {
+	for _, s := range strings.Split(path, "/") {
+		if s == seg {
+			return true
+		}
+	}
+	return false
+}
+
 // moveAway relocates src into backupDir, removing any existing entry there.
 // Missing sources are a no-op; errors on vanished files are tolerated so a
 // partially-moved install never aborts tidy.
