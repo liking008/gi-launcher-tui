@@ -286,6 +286,82 @@ func TestDownloadAssetsRepairsDamagedSameSize(t *testing.T) {
 	}
 }
 
+func TestDownloadAssetsScanReportsDiff(t *testing.T) {
+	valid := "valid-content-1"
+	correct2 := "correct-content-2"
+	damaged2 := "damaged-content-2"
+	missing3 := "missing-content-3"
+	if len(correct2) != len(damaged2) {
+		t.Fatalf("test setup: lengths differ")
+	}
+
+	installDir := t.TempDir()
+	write := func(rel, body string) {
+		p := filepath.Join(installDir, filepath.FromSlash(rel))
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(body), 0o644)
+	}
+	write("GenshinImpact_Data/a.dat", valid)    // ok
+	write("GenshinImpact_Data/b.dat", damaged2) // same size, wrong content
+
+	mkChunk := func(name, content string) []byte {
+		c := pbBytes(1, name)
+		c = append(c, pbVarint(3, 0)...)
+		c = append(c, pbVarint(4, uint64(len(content)))...)
+		c = append(c, pbVarint(5, uint64(len(content)))...)
+		return c
+	}
+	assetA := buildAsset("GenshinImpact_Data/a.dat", mkChunk("ca", valid), md5Hex(valid), uint64(len(valid)))
+	assetB := buildAsset("GenshinImpact_Data/b.dat", mkChunk("cb", correct2), md5Hex(correct2), uint64(len(correct2)))
+	assetC := buildAsset("GenshinImpact_Data/c.dat", mkChunk("cc", missing3), md5Hex(missing3), uint64(len(missing3)))
+	manifestData := buildManifest(t, [][]byte{assetA, assetB, assetC})
+
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/manifest_1":
+			w.Write(manifestData)
+		case "/ca":
+			hits.Add(1)
+			w.Write([]byte(valid))
+		case "/cb":
+			hits.Add(1)
+			w.Write([]byte(correct2))
+		case "/cc":
+			hits.Add(1)
+			w.Write([]byte(missing3))
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	comp := &Component{
+		Manifest:         ManifestInfo{ID: "manifest_1"},
+		ManifestDownload: DownloadConfig{URLPrefix: srv.URL},
+		ChunkDownload:    DownloadConfig{URLPrefix: srv.URL},
+	}
+
+	var scanNeed int
+	var scanBytes int64
+	_, err := DownloadAssets(context.Background(), srv.Client(), comp, installDir, Options{
+		SkipExisting: true,
+		OnScan:       func(need int, b int64) { scanNeed, scanBytes = need, b },
+	})
+	if err != nil {
+		t.Fatalf("DownloadAssets: %v", err)
+	}
+	if scanNeed != 2 {
+		t.Errorf("scan should report 2 files (1 damaged + 1 missing), got %d", scanNeed)
+	}
+	if want := int64(len(correct2) + len(missing3)); scanBytes != want {
+		t.Errorf("scan bytes = %d, want %d", scanBytes, want)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Errorf("expected only 2 downloads (valid file skipped), got %d", got)
+	}
+}
+
 func TestDownloadAssetsSkipExisting(t *testing.T) {
 	content := "already-valid-content"
 	installDir := t.TempDir()

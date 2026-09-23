@@ -72,6 +72,10 @@ func (m *model) viewDownload() string {
 		// Overall progress bar.
 		body.WriteString(overallBar(m, st) + "\n\n")
 
+		if st.scanInfo != "" {
+			body.WriteString(infoStyle(st.scanInfo) + "\n\n")
+		}
+
 		if st.indexing {
 			body.WriteString(m.spinner.View() + infoStyle(fmt.Sprintf(" 正在建立本地内容索引，以复用已有文件 (已扫描 %d 个文件)...", st.idxFiles)) + "\n")
 			body.WriteString(infoStyle("这只需一次，用于切换服务器时只下载差异部分") + "\n")

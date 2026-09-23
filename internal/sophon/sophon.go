@@ -114,6 +114,10 @@ type Options struct {
 	// content is shared between servers are reused from it by relative path +
 	// MD5 instead of being re-downloaded.
 	ReuseAltRoot string
+	// OnScan is called once after the local scan, with the number of files that
+	// are missing or damaged and the total bytes those files need. Only these
+	// files are (re)downloaded.
+	OnScan func(needFiles int, needBytes int64)
 	// Progress is invoked with (written, total) bytes as assets complete.
 	Progress func(done, total int64)
 }
@@ -130,9 +134,30 @@ func DownloadAssets(ctx context.Context, hc *http.Client, comp *Component, insta
 	if comp.ChunkDownload.Encryption != 0 {
 		return 0, fmt.Errorf("chunk 加密暂不支持 (%s)", comp.CategoryName)
 	}
+
+	// Scan pass: create directories and collect the assets that are missing or
+	// damaged (size or MD5 mismatch). Only these are (re)downloaded, so an
+	// update repairs just the wrong parts instead of rewriting everything.
+	var todo []Asset
 	var total int64
 	for _, a := range assets {
+		if a.Type == 64 { // directory
+			if a.Path != "" {
+				os.MkdirAll(filepath.Join(installDir, filepath.FromSlash(a.Path)), 0o755)
+			}
+			continue
+		}
+		dest := filepath.Join(installDir, filepath.FromSlash(a.Path))
+		if opts.SkipExisting && fileSize(dest) == a.Size {
+			if a.HashMD5 == "" || strings.EqualFold(md5File(dest), a.HashMD5) {
+				continue // already present and correct
+			}
+		}
+		todo = append(todo, a)
 		total += a.Size
+	}
+	if opts.OnScan != nil {
+		opts.OnScan(len(todo), total)
 	}
 
 	// Optional content index for cross-folder reuse.
@@ -154,31 +179,15 @@ func DownloadAssets(ctx context.Context, hc *http.Client, comp *Component, insta
 			opts.Progress(written, total)
 		}
 	}
+	report()
 
-	for _, a := range assets {
-		if a.Type == 64 { // directory
-			if a.Path != "" {
-				os.MkdirAll(filepath.Join(installDir, filepath.FromSlash(a.Path)), 0o755)
-			}
-			continue
-		}
+	for _, a := range todo {
 		dest := filepath.Join(installDir, filepath.FromSlash(a.Path))
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return written, err
 		}
 
-		// 1) Already present AND correct -> skip. Content is verified by MD5,
-		//    not just size, so a same-size damaged/incorrect file is repaired by
-		//    re-downloading it. In-game hot-update blocks live under Persistent/
-		//    and are not listed in the manifest, so they are never touched here.
-		if opts.SkipExisting && fileSize(dest) == a.Size {
-			if a.HashMD5 == "" || strings.EqualFold(md5File(dest), a.HashMD5) {
-				written += a.Size
-				report()
-				continue
-			}
-		}
-		// 2) Content exists elsewhere in the install -> copy it.
+		// 1) Content exists elsewhere in the install -> copy it.
 		if opts.ReuseContent && a.HashMD5 != "" {
 			if src, ok := reuseIdx[strings.ToLower(a.HashMD5)]; ok && src != dest {
 				if copyFile(src, dest) == nil {
@@ -188,7 +197,7 @@ func DownloadAssets(ctx context.Context, hc *http.Client, comp *Component, insta
 				}
 			}
 		}
-		// 2b) Reuse from the other server family by relative path + MD5.
+		// 2) Reuse from the other server family by relative path + MD5.
 		if opts.ReuseAltRoot != "" && a.HashMD5 != "" {
 			if cand := altCounterpart(opts.ReuseAltRoot, a.Path, dest); cand != "" &&
 				md5File(cand) == strings.ToLower(a.HashMD5) {
