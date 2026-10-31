@@ -2,3 +2,8 @@
 /gi-launcher-tui
 *.exe
 /cnman.bin
+
+/src/
+/pkg/
+/*.pkg.tar.zst
+/gi-launcher-tui-*.tar.gz
