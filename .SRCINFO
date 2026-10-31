@@ -8,6 +8,8 @@ pkgbase = gi-launcher-tui
 	makedepends = go
 	optdepends = dwproton-bin: 启动游戏所需（其他发行版可从 https://dawn.wine/dawn-winery/dwproton/ 下载）
 	provides = gi-launcher-tui
+	options = !debug
+	options = strip
 	source = gi-launcher-tui-0.1.7.tar.gz::https://github.com/liking008/gi-launcher-tui/archive/refs/tags/v0.1.7.tar.gz
 	sha256sums = 7d4a66cc0379f56e60c83f09ca86598d50bd774cb3d73f7ebd7b69c1b40cb605
 

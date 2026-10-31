@@ -11,6 +11,7 @@ makedepends=('go')
 optdepends=('dwproton-bin: 启动游戏所需（其他发行版可从 https://dawn.wine/dawn-winery/dwproton/ 下载）')
 provides=('gi-launcher-tui')
 conflicts=()
+options=('!debug' 'strip')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('7d4a66cc0379f56e60c83f09ca86598d50bd774cb3d73f7ebd7b69c1b40cb605')
 
