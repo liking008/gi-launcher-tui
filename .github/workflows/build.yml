@@ -25,11 +25,11 @@ jobs:
           GOARCH: amd64
           CGO_ENABLED: '0'
         run: |
-          go build -trimpath -ldflags="-s -w" -o gi-launcher .
+          go build -trimpath -ldflags="-s -w" -o gi-launcher-tui .
 
       - name: Verify static linking
         run: |
-          file gi-launcher | grep -q "statically linked" || (echo "binary is not statically linked"; exit 1)
+          file gi-launcher-tui | grep -q "statically linked" || (echo "binary is not statically linked"; exit 1)
 
       - name: Verify (vet + gofmt)
         run: |
@@ -39,8 +39,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gi-launcher-linux-amd64
-          path: gi-launcher
+          name: gi-launcher-tui-linux-amd64
+          path: gi-launcher-tui
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -52,7 +52,7 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: gi-launcher-linux-amd64
+          name: gi-launcher-tui-linux-amd64
           path: dist
 
       - name: Release

@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=GI Launcher TUI
+Name[zh_CN]=原神启动器 (TUI)
+Name[zh_TW]=原神啟動器 (TUI)
+GenericName=Genshin Impact Launcher
+GenericName[zh_CN]=原神启动器
+Comment=Terminal launcher for Genshin Impact (multi-server, download, accounts, launch)
+Comment[zh_CN]=原神 / Genshin Impact 终端启动器：多服务器、下载更新、校验、账号切换、启动游戏
+Exec=gi-launcher-tui
+TryExec=gi-launcher-tui
+Icon=gi-launcher-tui
+Terminal=true
+Categories=Game;
+Keywords=genshin;原神;miHoYo;hoyoverse;launcher;启动器;tui;terminal;dwproton;
+StartupNotify=false

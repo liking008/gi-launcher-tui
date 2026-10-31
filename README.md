@@ -41,13 +41,31 @@
 ## 构建与运行
 
 ```bash
-go build -o gi-launcher .
-./gi-launcher        # 在真实终端中运行
+go build -o gi-launcher-tui .
+./gi-launcher-tui        # 在真实终端中运行
 ```
 
 依赖：Go 1.21+（发布产物为 `CGO_ENABLED=0` 的静态链接可执行文件）。
 
 你也可以从 GitHub Releases 直接下载已构建的静态可执行文件。
+
+## Arch Linux 安装 / 打包
+
+仓库自带 `PKGBUILD`、`.desktop` 桌面项和 SVG 图标，可直接用 `makepkg` 构建标准 pacman 包：
+
+```bash
+git clone https://github.com/liking008/gi-launcher-tui.git
+cd gi-launcher-tui
+makepkg -si          # 构建并安装
+```
+
+安装后会：
+
+- 可执行文件：`/usr/bin/gi-launcher-tui`
+- 桌面项：`/usr/share/applications/gi-launcher-tui.desktop`（在应用菜单里以「原神启动器 (TUI)」出现，点击会在终端中打开）
+- 图标：`/usr/share/icons/hicolor/scalable/apps/gi-launcher-tui.svg`
+
+也可以直接用 `makepkg -s` 只生成 `gi-launcher-tui-*.pkg.tar.zst` 再手动 `pacman -U` 安装。
 
 ## 界面操作
 
