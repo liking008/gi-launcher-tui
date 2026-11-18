@@ -50,6 +50,16 @@ func (m *model) updateVerify(msg tea.Msg) tea.Cmd {
 		switch msg.String() {
 		case "v":
 			return m.startVerify()
+		case "d":
+			// Repair: download only the files the verification flagged.
+			if m.verify != nil && m.verify.result != nil && len(m.verify.result.Failed) > 0 {
+				set := make(map[string]bool, len(m.verify.result.Failed))
+				for _, fe := range m.verify.result.Failed {
+					set[fe.RemoteName] = true
+				}
+				m.navigate(pageDownload)
+				return m.fetchRemoteWith(set)
+			}
 		}
 	}
 	return nil
@@ -79,6 +89,9 @@ func (m *model) viewVerify() string {
 			)
 		}
 		body += "\n\n" + hintStyle("按 v 重新校验 · esc 返回")
+		if st.result != nil && len(st.result.Failed) > 0 {
+			body += "\n" + hintStyle("按 d 只下载这些缺失/损坏的文件（自动进入下载页并开始）")
+		}
 	}
 	head := titleStyle("校验游戏文件")
 	return lipglossBox(m.width, head+"\n\n"+body)

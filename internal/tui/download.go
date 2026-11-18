@@ -89,6 +89,10 @@ type downloadState struct {
 	scanName    string
 	scanScanned int
 	scanTotal   int
+
+	// repair mode: when non-nil, only these asset paths are downloaded (set by
+	// the verify page so "fix" downloads just the missing/corrupt files).
+	repairPaths map[string]bool
 }
 
 type (
@@ -133,7 +137,13 @@ type (
 )
 
 func (m *model) fetchRemote() tea.Cmd {
-	m.dl = &downloadState{step: "fetching"}
+	return m.fetchRemoteWith(nil)
+}
+
+// fetchRemoteWith fetches the remote build; when repair is non-nil the
+// resulting download only fetches those asset paths (verify → fix flow).
+func (m *model) fetchRemoteWith(repair map[string]bool) tea.Cmd {
+	m.dl = &downloadState{step: "fetching", repairPaths: repair}
 	ed := m.currentEdition()
 	return func() tea.Msg {
 		pkg, err := m.res.Fetch(context.Background(), ed)
@@ -177,6 +187,10 @@ func (m *model) updateDownload(msg tea.Msg) tea.Cmd {
 		m.buildDownloadPlan()
 		m.dl.step = "ready"
 		m.dl.total = len(m.dl.items)
+		if m.dl.repairPaths != nil {
+			// verify → fix flow: start downloading the flagged files right away.
+			return m.startDownload()
+		}
 		return nil
 	case idxMsg:
 		if m.dl != nil {
@@ -499,8 +513,13 @@ func (m *model) buildDownloadPlan() {
 				m.dl.sophonComps = append(m.dl.sophonComps, c)
 			}
 		}
-		m.dl.plan = fmt.Sprintf("[%s] 最新版本 %s (sophon 分块下载) · 当前版本 %s",
-			m.currentEdition().Name, latest, cur)
+		if m.dl.repairPaths != nil {
+			m.dl.plan = fmt.Sprintf("[%s] 修复模式：只下载校验标记的 %d 个文件 · 当前版本 %s",
+				m.currentEdition().Name, len(m.dl.repairPaths), cur)
+		} else {
+			m.dl.plan = fmt.Sprintf("[%s] 最新版本 %s (sophon 分块下载) · 当前版本 %s",
+				m.currentEdition().Name, latest, cur)
+		}
 		return
 	}
 
@@ -632,6 +651,7 @@ func (m *model) startSophonDownload() tea.Cmd {
 			n, err := sophon.DownloadAssets(ctx, hc, c, installDir,
 				sophon.Options{
 					SkipExisting: true,
+					OnlyPaths:    m.dl.repairPaths,
 					ReuseContent: true,
 					ReuseIndex:   idx,
 					ReuseAltRoot: altRoot,

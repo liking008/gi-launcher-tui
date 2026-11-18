@@ -452,3 +452,60 @@ func TestDownloadAssetsSkipExisting(t *testing.T) {
 		t.Fatalf("expected no chunk download (file valid), got %d", got)
 	}
 }
+
+func TestDownloadAssetsOnlyPathsRepair(t *testing.T) {
+	// Both files exist and are correct; OnlyPaths forces re-downloading just
+	// the flagged one (verify → repair), leaving the other untouched.
+	a, b := "content-a", "content-b"
+	installDir := t.TempDir()
+	os.MkdirAll(filepath.Join(installDir, "GenshinImpact_Data"), 0o755)
+	os.WriteFile(filepath.Join(installDir, "GenshinImpact_Data", "a.dat"), []byte(a), 0o644)
+	os.WriteFile(filepath.Join(installDir, "GenshinImpact_Data", "b.dat"), []byte(b), 0o644)
+
+	mk := func(name, content string) []byte {
+		c := pbBytes(1, name)
+		c = append(c, pbVarint(3, 0)...)
+		c = append(c, pbVarint(4, uint64(len(content)))...)
+		c = append(c, pbVarint(5, uint64(len(content)))...)
+		return c
+	}
+	assetA := buildAsset("GenshinImpact_Data/a.dat", mk("ca", a), md5Hex(a), uint64(len(a)))
+	assetB := buildAsset("GenshinImpact_Data/b.dat", mk("cb", b), md5Hex(b), uint64(len(b)))
+	manifestData := buildManifest(t, [][]byte{assetA, assetB})
+
+	var aHits, bHits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/manifest_1":
+			w.Write(manifestData)
+		case "/ca":
+			aHits.Add(1)
+			w.Write([]byte(a))
+		case "/cb":
+			bHits.Add(1)
+			w.Write([]byte(b))
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	comp := &Component{
+		Manifest:         ManifestInfo{ID: "manifest_1"},
+		ManifestDownload: DownloadConfig{URLPrefix: srv.URL},
+		ChunkDownload:    DownloadConfig{URLPrefix: srv.URL},
+	}
+	_, err := DownloadAssets(context.Background(), srv.Client(), comp, installDir, Options{
+		SkipExisting: true,
+		OnlyPaths:    map[string]bool{"GenshinImpact_Data/a.dat": true},
+	})
+	if err != nil {
+		t.Fatalf("DownloadAssets: %v", err)
+	}
+	if aHits.Load() != 1 {
+		t.Errorf("flagged file should be downloaded, got %d hits", aHits.Load())
+	}
+	if bHits.Load() != 0 {
+		t.Errorf("unflagged file must not be downloaded, got %d hits", bHits.Load())
+	}
+}

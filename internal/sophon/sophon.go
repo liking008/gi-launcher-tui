@@ -119,6 +119,11 @@ type Options struct {
 	// content is shared between servers are reused from it by relative path +
 	// MD5 instead of being re-downloaded.
 	ReuseAltRoot string
+	// OnlyPaths, when non-nil, restricts the download to exactly these asset
+	// paths (slash-separated, relative to installDir), regardless of size. It
+	// is used to repair the files a verification pass flagged without scanning
+	// (and re-downloading) the whole install.
+	OnlyPaths map[string]bool
 	// OnScan is called once after the local scan, with the number of files that
 	// are missing or damaged and the total bytes those files need. Only these
 	// files are (re)downloaded.
@@ -162,6 +167,17 @@ func DownloadAssets(ctx context.Context, hc *http.Client, comp *Component, insta
 			continue
 		}
 		dest := filepath.Join(installDir, filepath.FromSlash(a.Path))
+		// Repair mode: fetch exactly the flagged paths, ignoring their size.
+		if opts.OnlyPaths != nil {
+			if opts.OnlyPaths[a.Path] {
+				todo = append(todo, a)
+				total += a.Size
+			}
+			if opts.OnScanProgress != nil && (i+1)%128 == 0 {
+				opts.OnScanProgress(i+1, len(assets))
+			}
+			continue
+		}
 		if opts.SkipExisting && fileSize(dest) == a.Size {
 			// Trust the size by default (fast): hashing the whole install on
 			// every update is far too slow. VerifyMD5 opts into a full check.
