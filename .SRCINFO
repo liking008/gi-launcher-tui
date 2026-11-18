@@ -11,6 +11,6 @@ pkgbase = gi-launcher-tui
 	options = !debug
 	options = strip
 	source = gi-launcher-tui-0.1.8.tar.gz::https://github.com/liking008/gi-launcher-tui/archive/refs/tags/v0.1.8.tar.gz
-	sha256sums = 7d4a66cc0379f56e60c83f09ca86598d50bd774cb3d73f7ebd7b69c1b40cb605
+	sha256sums = 532afd15db54b5d224ce61507f841ec8b6cb0952205731bef765bc06ee53c939
 
 pkgname = gi-launcher-tui
