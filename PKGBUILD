@@ -1,6 +1,6 @@
 # Maintainer: liking008 <wang392719101@163.com>
 pkgname=gi-launcher-tui
-pkgver=0.1.7
+pkgver=0.1.8
 pkgrel=1
 pkgdesc="原神 / Genshin Impact 终端启动器（TUI：多服务器、sophon 下载、校验、账号切换、dwproton 启动）"
 arch=('x86_64')

@@ -98,8 +98,13 @@ func FetchManifest(ctx context.Context, hc *http.Client, comp *Component) ([]Ass
 // Options controls the asset download behaviour.
 type Options struct {
 	// SkipExisting skips files already present at their target path with a
-	// matching MD5 (resume / verify-before-download).
+	// matching size (and, when VerifyMD5 is set, a matching MD5).
 	SkipExisting bool
+	// VerifyMD5 forces a full MD5 check of existing files instead of trusting
+	// the size. Off by default: hashing a 100GB+ install on every update is
+	// extremely slow, and changed files almost always change size. The dedicated
+	// integrity check (校验) still does full MD5 verification.
+	VerifyMD5 bool
 	// ReuseContent looks up an asset's content elsewhere in the install (e.g.
 	// from another server's data folder) by MD5 and copies it instead of
 	// downloading. This makes server switching download only genuinely new
@@ -158,7 +163,9 @@ func DownloadAssets(ctx context.Context, hc *http.Client, comp *Component, insta
 		}
 		dest := filepath.Join(installDir, filepath.FromSlash(a.Path))
 		if opts.SkipExisting && fileSize(dest) == a.Size {
-			if a.HashMD5 == "" || strings.EqualFold(md5File(dest), a.HashMD5) {
+			// Trust the size by default (fast): hashing the whole install on
+			// every update is far too slow. VerifyMD5 opts into a full check.
+			if !opts.VerifyMD5 || a.HashMD5 == "" || strings.EqualFold(md5File(dest), a.HashMD5) {
 				continue // already present and correct
 			}
 		}

@@ -217,7 +217,7 @@ func (m *model) updateDownload(msg tea.Msg) tea.Cmd {
 			if msg.need == 0 {
 				m.dl.scanInfo = fmt.Sprintf("[%s] 扫描完成：本地文件完整，无需下载", msg.name)
 			} else {
-				m.dl.scanInfo = fmt.Sprintf("[%s] 扫描完成：%d 个文件缺失/损坏，需下载 %s",
+				m.dl.scanInfo = fmt.Sprintf("[%s] 扫描完成：%d 个文件缺失/大小不符，需下载 %s（按大小校验，完整 MD5 请用「校验」）",
 					msg.name, msg.need, humanBytes(msg.bytes))
 			}
 		}
@@ -626,6 +626,7 @@ func (m *model) startSophonDownload() tea.Cmd {
 		// folder if it is present (avoids re-downloading shared content).
 		altRoot := altDataFolderPath(installDir, target)
 
+		allOK := true
 		for _, c := range comps {
 			ch <- dlProgress{name: c.CategoryName, done: 0, size: 0, pct: 0}
 			n, err := sophon.DownloadAssets(ctx, hc, c, installDir,
@@ -652,6 +653,15 @@ func (m *model) startSophonDownload() tea.Cmd {
 					},
 				})
 			ch <- dlFinished{name: c.CategoryName, err: err, total: n}
+			if err != nil {
+				allOK = false
+			}
+		}
+
+		// Record the new version in config.ini so the local "current version"
+		// tracks reality (previously it stayed at the old value forever).
+		if allOK && m.dl.branch != nil && m.dl.branch.Main.Tag != "" {
+			_ = m.cfg.Game(target).SetVersion(m.dl.branch.Main.Tag)
 		}
 
 		// Verify completeness against the manifests after download.
