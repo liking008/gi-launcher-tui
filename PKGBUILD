@@ -13,7 +13,7 @@ provides=('gi-launcher-tui')
 conflicts=()
 options=('!debug' 'strip')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('acf5aa4273f79d98dbc3860b2f59352b9cba6a47d2836cef4676bf2c9b842304')
 
 build() {
   cd "$pkgname-$pkgver"
