@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+
+	"github.com/liking008/gi-launcher-tui/internal/manifest"
 )
 
 func md5Hex(s string) string {
@@ -507,5 +509,27 @@ func TestDownloadAssetsOnlyPathsRepair(t *testing.T) {
 	}
 	if bHits.Load() != 0 {
 		t.Errorf("unflagged file must not be downloaded, got %d hits", bHits.Load())
+	}
+}
+
+func TestWritePkgVersion(t *testing.T) {
+	dir := t.TempDir()
+	assets := []Asset{
+		{Path: "GenshinImpact_Data/a.dat", Size: 3, HashMD5: "AABBCC"},
+		{Type: 64, Path: "some/dir"},
+		{Path: "GenshinImpact_Data/b.dat", Size: 5, HashMD5: "112233"},
+	}
+	if err := WritePkgVersion(dir, assets); err != nil {
+		t.Fatalf("WritePkgVersion: %v", err)
+	}
+	man, err := manifest.Load(filepath.Join(dir, "pkg_version"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(man.Files) != 2 {
+		t.Fatalf("expected 2 files (dirs skipped), got %d", len(man.Files))
+	}
+	if man.Files[0].RemoteName != "GenshinImpact_Data/a.dat" || man.Files[0].MD5 != "aabbcc" || man.Files[0].FileSize != 3 {
+		t.Fatalf("unexpected first entry: %+v", man.Files[0])
 	}
 }

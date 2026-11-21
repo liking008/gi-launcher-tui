@@ -683,6 +683,20 @@ func (m *model) startSophonDownload() tea.Cmd {
 		if allOK && m.dl.branch != nil && m.dl.branch.Main.Tag != "" {
 			_ = m.cfg.Game(target).SetVersion(m.dl.branch.Main.Tag)
 		}
+		// Regenerate pkg_version from the game manifest so local verification
+		// matches the installed version (otherwise it keeps comparing against
+		// the old version and "repair" fetches the wrong files).
+		if allOK {
+			for _, c := range comps {
+				if c.MatchingField != "game" {
+					continue
+				}
+				if assets, err := sophon.FetchManifest(ctx, hc, c); err == nil {
+					_ = sophon.WritePkgVersion(installDir, assets)
+				}
+				break
+			}
+		}
 
 		// Verify completeness against the manifests after download.
 		m.dl.installStep = "verifying"

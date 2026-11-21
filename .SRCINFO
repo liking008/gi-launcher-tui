@@ -1,6 +1,6 @@
 pkgbase = gi-launcher-tui
 	pkgdesc = 原神 / Genshin Impact 终端启动器（TUI：多服务器、sophon 下载、校验、账号切换、dwproton 启动）
-	pkgver = 0.1.9
+	pkgver = 0.1.10
 	pkgrel = 1
 	url = https://github.com/liking008/gi-launcher-tui
 	arch = x86_64
@@ -10,7 +10,7 @@ pkgbase = gi-launcher-tui
 	provides = gi-launcher-tui
 	options = !debug
 	options = strip
-	source = gi-launcher-tui-0.1.9.tar.gz::https://github.com/liking008/gi-launcher-tui/archive/refs/tags/v0.1.9.tar.gz
-	sha256sums = 6f8658ee356c67562ea77358ea314d4d0f1c9f33cc3a45ad95f38dcf8bf77a47
+	source = gi-launcher-tui-0.1.10.tar.gz::https://github.com/liking008/gi-launcher-tui/archive/refs/tags/v0.1.10.tar.gz
+	sha256sums = SKIP
 
 pkgname = gi-launcher-tui

@@ -380,6 +380,21 @@ func copyFile(src, dst string) error {
 	return cerr
 }
 
+// WritePkgVersion regenerates the install-root pkg_version manifest from a
+// sophon asset list, so the local manifest matches what is actually installed
+// (and offline verification checks the right version).
+func WritePkgVersion(installDir string, assets []Asset) error {
+	var b strings.Builder
+	for _, a := range assets {
+		if a.Type == 64 {
+			continue
+		}
+		fmt.Fprintf(&b, "{\"remoteName\":%q,\"md5\":%q,\"hash\":\"\",\"fileSize\":%d}\n",
+			a.Path, strings.ToLower(a.HashMD5), a.Size)
+	}
+	return os.WriteFile(filepath.Join(installDir, "pkg_version"), []byte(b.String()), 0o644)
+}
+
 // VerifyAssets checks each file in the component's manifest against installDir,
 // returning how many files are complete (present with matching MD5) out of the
 // total, and how many bytes are missing/invalid.

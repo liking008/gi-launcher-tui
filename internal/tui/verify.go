@@ -1,13 +1,17 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/liking008/gi-launcher-tui/internal/edition"
 	"github.com/liking008/gi-launcher-tui/internal/manifest"
+	"github.com/liking008/gi-launcher-tui/internal/sophon"
 )
 
 func lipglossBox(width int, content string) string {
@@ -28,10 +32,19 @@ type verifyState struct {
 func (m *model) startVerify() tea.Cmd {
 	m.verify = &verifyState{step: "loading"}
 	g := m.activeGame()
+	ed := m.currentEdition()
+	hc := m.httpClient()
 	return func() tea.Msg {
-		man, err := manifest.Load(filepath.Join(g.Dir, "pkg_version"))
+		// Prefer the remote manifest for the current version: the on-disk
+		// pkg_version can be stale (e.g. still 7.0 while the game is 7.2),
+		// which made verification flag the wrong files and "repair" download
+		// the wrong version. Fall back to the local manifest when offline.
+		man, err := m.remoteGameManifest(ed, hc)
 		if err != nil {
-			return errMsg{err: err}
+			man, err = manifest.Load(filepath.Join(g.Dir, "pkg_version"))
+			if err != nil {
+				return errMsg{err: err}
+			}
 		}
 		m.verify.manifest = man
 		m.verify.total = len(man.Files)
@@ -43,6 +56,39 @@ func (m *model) startVerify() tea.Cmd {
 		m.verify.step = "done"
 		return verifyMsg{done: res.Ok + len(res.Failed), total: res.Total}
 	}
+}
+
+// remoteGameManifest fetches the current edition's game manifest from the
+// branch/build API, converted to the pkg_version format used for verification.
+func (m *model) remoteGameManifest(ed edition.Edition, hc *http.Client) (*manifest.Manifest, error) {
+	ctx := context.Background()
+	br, err := m.res.FetchBranch(ctx, ed)
+	if err != nil {
+		return nil, err
+	}
+	build, err := sophon.GetBuild(ctx, hc, ed, br.Main.PackageID, br.Main.Password, br.Main.Tag)
+	if err != nil {
+		return nil, err
+	}
+	for i := range build.Data.Manifests {
+		c := &build.Data.Manifests[i]
+		if c.MatchingField != "game" {
+			continue
+		}
+		assets, err := sophon.FetchManifest(ctx, hc, c)
+		if err != nil {
+			return nil, err
+		}
+		files := make([]manifest.File, 0, len(assets))
+		for _, a := range assets {
+			if a.Type == 64 {
+				continue
+			}
+			files = append(files, manifest.File{RemoteName: a.Path, MD5: a.HashMD5, FileSize: a.Size})
+		}
+		return &manifest.Manifest{Name: "remote-" + br.Main.Tag, Files: files}, nil
+	}
+	return nil, fmt.Errorf("远端清单中没有游戏资源")
 }
 
 func (m *model) updateVerify(msg tea.Msg) tea.Cmd {
@@ -80,8 +126,9 @@ func (m *model) viewVerify() string {
 		r := st.result
 		if r != nil {
 			body = fmt.Sprintf(
-				"%s\n\n  文件总数: %d\n  正常: %s\n  缺失/损坏: %s\n  需下载大小: %s",
+				"%s\n\n  校验基准: %s\n  文件总数: %d\n  正常: %s\n  缺失/损坏: %s\n  需下载大小: %s",
 				accentStyle("✓ 校验完成"),
+				infoStyle(st.manifest.Name),
 				r.Total,
 				accentStyle(fmt.Sprint(r.Ok)),
 				errStyle(fmt.Sprintf("%d (缺失 %d, 损坏 %d)", len(r.Failed), r.Missing, r.Mismatch)),

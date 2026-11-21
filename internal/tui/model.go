@@ -3,7 +3,10 @@ package tui
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
@@ -117,7 +120,37 @@ func (m *model) refresh() tea.Cmd {
 
 // httpClient returns a shared HTTP client for downloads.
 func (m *model) httpClient() *http.Client {
-	return &http.Client{Timeout: 0}
+	// Per-request timeout so a stalled CDN connection fails (and the user can
+	// re-run, resuming completed files) instead of hanging forever.
+	return &http.Client{Timeout: 3 * time.Minute, Transport: downloadTransport()}
+}
+
+// downloadTransport bypasses the system proxy for the game's CDN hosts. In many
+// networks (esp. behind a Clash-style proxy) the CDN is directly reachable and
+// much faster, while routing it through the proxy is slow enough that manifest
+// and chunk downloads time out. API hosts keep using the proxy.
+func downloadTransport() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.ResponseHeaderTimeout = 30 * time.Second
+	t.TLSHandshakeTimeout = 15 * time.Second
+	t.IdleConnTimeout = 90 * time.Second
+	t.Proxy = func(req *http.Request) (*url.URL, error) {
+		if isCDNHost(req.URL.Hostname()) {
+			return nil, nil
+		}
+		return http.ProxyFromEnvironment(req)
+	}
+	return t
+}
+
+// isCDNHost reports whether host is a miHoYo/HoYoverse content-delivery host
+// (autopatch*.yuanshen.com, *.yuanshen.com, Akamai edge) that should be reached
+// directly rather than through the proxy.
+func isCDNHost(host string) bool {
+	host = strings.ToLower(host)
+	return strings.Contains(host, "autopatch") ||
+		host == "yuanshen.com" || strings.HasSuffix(host, ".yuanshen.com") ||
+		strings.HasSuffix(host, ".akamaized.net") || strings.HasSuffix(host, ".akamai.net")
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
